@@ -85,17 +85,17 @@ def read_data(filename):
 vocabulary = read_data(filename)
 print('Data size', len(vocabulary))
 
-# Step 2: Build the dictionary and replace rare words with UNK token.
+# Step 2: 构建字典，生僻词使用'UNK'代替
 vocabulary_size = 50000
 
 
 def build_dataset(words, n_words):
   """Process raw inputs into a dataset."""
   count = [['UNK', -1]]
-  count.extend(collections.Counter(words).most_common(n_words - 1))
+  count.extend(collections.Counter(words).most_common(n_words - 1))  # 取词频最高的词加到字典里
   dictionary = dict()
   for word, _ in count:
-    dictionary[word] = len(dictionary)
+    dictionary[word] = len(dictionary)  # 对字典里的词进行编号
   data = list()
   unk_count = 0
   for word in words:
@@ -108,12 +108,10 @@ def build_dataset(words, n_words):
   return data, count, dictionary, reversed_dictionary
 
 
-# Filling 4 global variables:
-# data - list of codes (integers from 0 to vocabulary_size-1).
-#   This is the original text but words are replaced by their codes
-# count - map of words(strings) to count of occurrences
-# dictionary - map of words(strings) to their codes(integers)
-# reverse_dictionary - maps codes(integers) to words(strings)
+# data - list 将原始的文本词转换为编码后的编码序列
+# count - map 每个词及其词频
+# dictionary - map 每个词及其编码
+# reverse_dictionary - maps 每个编码到词的映射
 data, count, dictionary, reverse_dictionary = build_dataset(
     vocabulary, vocabulary_size)
 del vocabulary  # Hint to reduce memory.
@@ -123,7 +121,7 @@ print('Sample data', data[:10], [reverse_dictionary[i] for i in data[:10]])
 data_index = 0
 
 
-# Step 3: Function to generate a training batch for the skip-gram model.
+# Step 3: 用于训练模型时生成batch的函数
 def generate_batch(batch_size, num_skips, skip_window):
   global data_index
   assert batch_size % num_skips == 0
@@ -158,10 +156,10 @@ for i in range(8):
   print(batch[i], reverse_dictionary[batch[i]], '->', labels[i, 0],
         reverse_dictionary[labels[i, 0]])
 
-# Step 4: Build and train a skip-gram model.
+# Step 4: 创建并训练skip-gram模型
 
 batch_size = 128
-embedding_size = 128  # Dimension of the embedding vector.
+embedding_size = 128  # 嵌入向量的维度
 skip_window = 1  # How many words to consider left and right.
 num_skips = 2  # How many times to reuse an input to generate a label.
 num_sampled = 64  # Number of negative examples to sample.
@@ -188,6 +186,7 @@ with graph.as_default():
   with tf.device('/cpu:0'):
     # Look up embeddings for inputs.
     with tf.name_scope('embeddings'):
+      # 定义嵌入矩阵，[字典大小, 维度大小]
       embeddings = tf.Variable(
           tf.random_uniform([vocabulary_size, embedding_size], -1.0, 1.0))
       embed = tf.nn.embedding_lookup(embeddings, train_inputs)
@@ -295,7 +294,14 @@ with tf.Session(graph=graph) as session:
           close_word = reverse_dictionary[nearest[k]]
           log_str = '%s %s,' % (log_str, close_word)
         print(log_str)
-  final_embeddings = normalized_embeddings.eval()
+  final_embeddings = normalized_embeddings.eval()  # 最终训练得到的词向量，类型为np.array
+
+  # 保存embedding
+  with open(os.path.join(FLAGS.log_dir, 'embedding.txt', 'w')) as f:
+    for i in range(vocabulary_size):
+      vec = final_embeddings[i, :]
+      vecstr = np.array2string(vec, separator=',', max_line_width=20000).lstrip('[').rstrip(']').replace(' ', '')
+      f.write(vecstr + '\n')
 
   # Write corresponding labels for the embeddings.
   with open(FLAGS.log_dir + '/metadata.tsv', 'w') as f:
